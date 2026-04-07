@@ -1,72 +1,189 @@
 import streamlit as st
 import torch
-import torch.nn.functional as F
+import torch.nn as nn
 from torchvision import models, transforms
 from PIL import Image
-import os
-import requests
+import matplotlib.pyplot as plt
+import numpy as np
+import time
 
-st.title("🐾 RGB Animal Classifier")
+# Page Config
+st.set_page_config(
+    page_title="AI Animal Classifier",
+    page_icon="🐾",
+    layout="wide"
+)
 
-device = torch.device("cpu")
+# Theme Switch
+theme = st.sidebar.radio(
+    "🌙 Select Theme",
+    ["Dark","Light"]
+)
 
-# ==============================
-# Model Download
-# ==============================
+# Background Themes
+if theme == "Dark":
 
-MODEL_URL = "https://huggingface.co/ihassa074/animal-classifier-model/resolve/main/animal_model.pth?download=true"
-MODEL_PATH = "animal_model.pth"
+    bg = """
+    <style>
+    .stApp {
+    background-image: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
+    color:white;
+    }
+    </style>
+    """
 
-if not os.path.exists(MODEL_PATH):
-    st.write("Downloading model... Please wait ⏳")
-    response = requests.get(MODEL_URL)
-    with open(MODEL_PATH, "wb") as f:
-        f.write(response.content)
-    st.write("Model downloaded successfully ✅")
+else:
 
-# ==============================
+    bg = """
+    <style>
+    .stApp {
+    background-image: linear-gradient(135deg,#f5f7fa,#c3cfe2);
+    }
+    </style>
+    """
+
+st.markdown(bg, unsafe_allow_html=True)
+
+# Header
+st.markdown(
+"""
+<h1 style='text-align:center;'>🐾 AI Animal Classifier Dashboard</h1>
+<h4 style='text-align:center;'>Deep Learning Animal Detection System</h4>
+""",
+unsafe_allow_html=True
+)
+
+# Animal Classes
+class_names = [
+    "Dog 🐶",
+    "Hen 🐔",
+    "Horse 🐎",
+    "Sheep 🐑"
+]
+
+# Animal Info Panel
+animal_info = {
+"Dog 🐶": "Dogs are loyal animals often kept as pets.",
+"Hen 🐔": "Hens are domestic birds used for eggs.",
+"Horse 🐎": "Horses are strong animals used for transport.",
+"Sheep 🐑": "Sheep provide wool and meat."
+}
+
+# Transform
+transform = transforms.Compose([
+    transforms.Resize((224,224)),
+    transforms.ToTensor()
+])
+
 # Load Model
-# ==============================
-
 @st.cache_resource
 def load_model():
+
     model = models.resnet18(weights=None)
-    model.fc = torch.nn.Linear(model.fc.in_features, 4)  # 4 classes
-    model.load_state_dict(torch.load(MODEL_PATH, map_location=device))
-    model.to(device)
+    model.fc = nn.Linear(model.fc.in_features, 4)
+
+    model.load_state_dict(
+        torch.load("animal_model.pth", map_location="cpu")
+    )
+
     model.eval()
+
     return model
 
 model = load_model()
 
-# ==============================
-# Image Transform
-# ==============================
+# Upload Section
+uploaded_file = st.file_uploader(
+    "📂 Upload Animal Image",
+    type=["jpg","jpeg","png"]
+)
 
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor()
-])
+if uploaded_file:
 
-# ⚠️ MUST MATCH TRAINING ORDER (alphabetical)
-classes = ["dog", "hen", "horse", "sheep"]
+    image = Image.open(uploaded_file).convert("RGB")
 
-# ==============================
-# Upload Image
-# ==============================
+    col1,col2 = st.columns(2)
 
-file = st.file_uploader("Upload an animal image", type=["jpg", "png", "jpeg"])
+    with col1:
 
-if file:
-    image = Image.open(file).convert("RGB")
-    st.image(image, caption="Uploaded Image", width=300)
+        st.image(
+            image,
+            caption="Uploaded Image",
+            use_container_width=True
+        )
 
-    img_tensor = transform(image).unsqueeze(0).to(device)
+    with st.spinner("🔍 Analyzing Image..."):
 
-    with torch.no_grad():
-        output = model(img_tensor)
-        probs = F.softmax(output, dim=1)
-        confidence, predicted = torch.max(probs, 1)
+        time.sleep(2)
 
-    st.success(f"Prediction: {classes[predicted.item()]}")
-    st.write(f"Confidence: {confidence.item():.2f}")
+        img_tensor = transform(image).unsqueeze(0)
+
+        outputs = model(img_tensor)
+
+        probs = torch.nn.functional.softmax(
+            outputs[0],
+            dim=0
+        )
+
+        confidence, predicted = torch.max(probs,0)
+
+    predicted_class = class_names[predicted]
+
+    # Result Panel
+    with col2:
+
+        st.success(
+            f"Prediction: {predicted_class}"
+        )
+
+        st.progress(float(confidence))
+
+        st.write(
+            f"Confidence: {confidence*100:.2f}%"
+        )
+
+        # Animal Info
+        st.info(
+            animal_info[predicted_class]
+        )
+
+    # Probability Chart
+    st.subheader("📊 Prediction Probabilities")
+
+    fig, ax = plt.subplots()
+
+    ax.bar(
+        class_names,
+        probs.detach().numpy()
+    )
+
+    plt.xticks(rotation=45)
+
+    st.pyplot(fig)
+
+    # Top Predictions
+    st.subheader("🧠 Top Predictions")
+
+    sorted_probs = sorted(
+        zip(class_names,probs),
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    for name,prob in sorted_probs:
+
+        st.write(
+            f"{name} — {prob*100:.2f}%"
+        )
+
+# Footer
+st.markdown(
+"""
+<hr>
+<center>
+Made by <b>Ibrarul Hassan</b> 🚀  
+AI Animal Classification System
+</center>
+""",
+unsafe_allow_html=True
+)
