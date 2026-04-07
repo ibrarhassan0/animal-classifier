@@ -7,20 +7,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 import time
 
-# Page Config
+# Page config
 st.set_page_config(
     page_title="AI Animal Classifier",
     page_icon="🐾",
     layout="wide"
 )
 
-# Theme Switch
+# Theme switch
 theme = st.sidebar.radio(
     "🌙 Select Theme",
     ["Dark","Light"]
 )
 
-# Background Themes
+# Background theme
 if theme == "Dark":
 
     bg = """
@@ -53,7 +53,7 @@ st.markdown(
 unsafe_allow_html=True
 )
 
-# Animal Classes
+# Classes
 class_names = [
     "Dog 🐶",
     "Hen 🐔",
@@ -61,30 +61,50 @@ class_names = [
     "Sheep 🐑"
 ]
 
-# Animal Info Panel
+# Animal info
 animal_info = {
-"Dog 🐶": "Dogs are loyal animals often kept as pets.",
-"Hen 🐔": "Hens are domestic birds used for eggs.",
-"Horse 🐎": "Horses are strong animals used for transport.",
-"Sheep 🐑": "Sheep provide wool and meat."
+
+"Dog 🐶":
+"Dogs are loyal animals often kept as pets.",
+
+"Hen 🐔":
+"Hens are domestic birds used for eggs.",
+
+"Horse 🐎":
+"Horses are strong animals used for transport.",
+
+"Sheep 🐑":
+"Sheep provide wool and meat."
+
 }
 
-# Transform
+# Image transform
 transform = transforms.Compose([
     transforms.Resize((224,224)),
     transforms.ToTensor()
 ])
 
-# Load Model
+# Load model from HuggingFace
 @st.cache_resource
 def load_model():
 
-    model = models.resnet18(weights=None)
-    model.fc = nn.Linear(model.fc.in_features, 4)
+    device = torch.device("cpu")
 
-    model.load_state_dict(
-        torch.load("animal_model.pth", map_location="cpu")
+    model = models.resnet18(weights=None)
+
+    model.fc = nn.Linear(
+        model.fc.in_features,
+        4
     )
+
+    MODEL_URL = "https://huggingface.co/ihassa074/animal-classifier-model/resolve/main/animal_model.pth"
+
+    state_dict = torch.hub.load_state_dict_from_url(
+        MODEL_URL,
+        map_location=device
+    )
+
+    model.load_state_dict(state_dict)
 
     model.eval()
 
@@ -92,7 +112,7 @@ def load_model():
 
 model = load_model()
 
-# Upload Section
+# Upload
 uploaded_file = st.file_uploader(
     "📂 Upload Animal Image",
     type=["jpg","jpeg","png"]
@@ -125,29 +145,33 @@ if uploaded_file:
             dim=0
         )
 
-        confidence, predicted = torch.max(probs,0)
+        confidence, predicted = torch.max(
+            probs,
+            0
+        )
 
     predicted_class = class_names[predicted]
 
-    # Result Panel
+    # Result
     with col2:
 
         st.success(
             f"Prediction: {predicted_class}"
         )
 
-        st.progress(float(confidence))
+        st.progress(
+            float(confidence)
+        )
 
         st.write(
             f"Confidence: {confidence*100:.2f}%"
         )
 
-        # Animal Info
         st.info(
             animal_info[predicted_class]
         )
 
-    # Probability Chart
+    # Probability chart
     st.subheader("📊 Prediction Probabilities")
 
     fig, ax = plt.subplots()
@@ -161,7 +185,7 @@ if uploaded_file:
 
     st.pyplot(fig)
 
-    # Top Predictions
+    # Top predictions
     st.subheader("🧠 Top Predictions")
 
     sorted_probs = sorted(
